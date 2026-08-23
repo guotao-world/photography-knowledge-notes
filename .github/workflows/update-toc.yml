@@ -1,0 +1,56 @@
+name: Update README TOC
+
+# 监听 main 分支的 push 事件
+on:
+  push:
+    branches:
+      - main
+
+# 权限配置：需要写入仓库内容（push 修改后的 README.md）
+permissions:
+  contents: write
+
+jobs:
+  update-toc:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 检出仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # 获取完整历史，避免浅克隆导致的问题
+          fetch-depth: 0
+          # 持久化凭证，使后续 git push 能自动认证
+          persist-credentials: true
+          # 显式传入 token
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # 3. 运行目录生成脚本
+      - name: Generate TOC
+        run: python scripts/generate_toc.py
+
+      # 4. 检测 README.md 是否变化，如果有变化则提交
+      - name: Commit and push if changed
+        run: |
+          set -e
+          # 配置 git 用户
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 检查 README.md 是否有变化
+          if git diff --quiet README.md; then
+            echo "README.md 无变化，无需提交"
+          else
+            echo "README.md 有变化，正在提交..."
+            git add README.md
+            # 使用 [skip ci] 避免循环触发
+            git commit -m "update README toc [skip ci]"
+            # 明确推送到 main 分支
+            git push origin main
+            echo "README.md 已提交并推送"
+          fi
